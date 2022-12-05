@@ -175,7 +175,7 @@ class WebContent:
 
     Important Notes:
         - When modifying the attributes specified above, please make sure your
-        changes only perform the minimum requried edits to make your add-on work.
+        changes only perform the minimum required edits to make your add-on work.
         You should avoid overwriting or interfering with existing data as much
         as possible, instead opting to append your own changes, e.g.:
 
@@ -247,12 +247,6 @@ class AnkiWebView(QWebEngineView):
 
         self.resetHandlers()
         self._filterSet = False
-        QShortcut(  # type: ignore
-            QKeySequence("Esc"),
-            self,
-            context=Qt.ShortcutContext.WidgetWithChildrenShortcut,
-            activated=self.onEsc,
-        )
         gui_hooks.theme_did_change.append(self.on_theme_did_change)
 
     def set_title(self, title: str) -> None:
@@ -332,7 +326,6 @@ class AnkiWebView(QWebEngineView):
         self._domDone = True
         self._queueAction("setHtml", html)
         self.set_open_links_externally(True)
-        self.setZoomFactor(1)
         self.allow_drops = False
         self.show()
 
@@ -412,30 +405,32 @@ class AnkiWebView(QWebEngineView):
             family = tr.qt_misc_segoe_ui()
             button_style = f"""
 button {{ font-family: {family}; }}
-button:focus {{ outline: 5px auto {color_hl}; }}"""
-            font = f"font-size:12px;font-family:{family};"
+            """
+            font = f"font-family:{family};"
         elif is_mac:
             family = "Helvetica"
-            font = f'font-size:15px;font-family:"{family}";'
-            color = ""
-            if not theme_manager.night_mode:
-                color = "background: #fff; border: 1px solid #ccc;"
-            button_style = (
-                """
-button { -webkit-appearance: none; %s
-border-radius:5px; font-family: Helvetica }"""
-                % color
-            )
+            font = f'font-family:"{family}";'
+            button_style = """
+button {
+    --canvas: #fff;
+    -webkit-appearance: none;
+    background: var(--canvas);
+    border-radius: var(--border-radius);
+    padding: 3px 12px;
+    border: 0.5px solid var(--border);
+    box-shadow: 0px 1px 3px var(--border-subtle);
+    font-family: Helvetica
+}
+.night-mode button { --canvas: #606060; --fg: #eee; }
+"""
         else:
             family = self.font().family()
-            color_hl_txt = palette.color(QPalette.ColorRole.HighlightedText).name()
-            font = f'font-size:14px;font-family:"{family}", sans-serif;'
+            font = f'font-family:"{family}", sans-serif;'
             button_style = """
 /* Buttons */
 button{{ 
-        font-family:"{family}", sans-serif; }}
-button:focus{{ border-color: {color_hl} }}
-button:active, button:active:hover {{ background-color: {color_hl}; color: {color_hl_txt};}}
+    font-family: "{family}", sans-serif;
+}}
 /* Input field focus outline */
 textarea:focus, input:focus, input[type]:focus, .uneditable-input:focus,
 div[contenteditable="true"]:focus {{   
@@ -444,7 +439,6 @@ div[contenteditable="true"]:focus {{
 }}""".format(
                 family=family,
                 color_hl=color_hl,
-                color_hl_txt=color_hl_txt,
             )
 
         zoom = self.app_zoom_factor()
@@ -453,8 +447,8 @@ div[contenteditable="true"]:focus {{
 body {{ zoom: {zoom}; background-color: var(--canvas); }}
 html {{ {font} }}
 {button_style}
-:root {{ --canvas: {colors.CANVAS[0]} }}
-:root[class*=night-mode] {{ --canvas: {colors.CANVAS[1]} }}
+:root {{ --canvas: {colors.CANVAS["light"]} }}
+:root[class*=night-mode] {{ --canvas: {colors.CANVAS["dark"]} }}
 """
 
     def stdHtml(
@@ -601,6 +595,8 @@ html {{ {font} }}
         if cmd == "domDone":
             self._domDone = True
             self._maybeRunActions()
+        elif cmd == "close":
+            self.onEsc()
         else:
             handled, result = gui_hooks.webview_did_receive_js_message(
                 (False, None), cmd, self._bridge_context
@@ -646,11 +642,12 @@ html {{ {font} }}
         self.setSizePolicy(sp)
         self.hide()
 
-    def inject_dynamic_style_and_show(self) -> None:
-        "Add dynamic styling, and reveal."
+    def add_dynamic_css_and_classes_then_show(self) -> None:
+        "Add dynamic styling, set platform-specific body classes and reveal."
         css = self.standard_css()
+        body_classes = theme_manager.body_class().split(" ")
 
-        def after_style(arg: Any) -> None:
+        def after_injection(arg: Any) -> None:
             gui_hooks.webview_did_inject_style_into_page(self)
             self.show()
 
@@ -660,9 +657,10 @@ html {{ {font} }}
     const style = document.createElement('style');
     style.innerHTML = `{css}`;
     document.head.appendChild(style);
+    document.body.classList.add({", ".join([f'"{c}"' for c in body_classes])});
 }})();
 """,
-            after_style,
+            after_injection,
         )
 
     def load_ts_page(self, name: str) -> None:
@@ -673,10 +671,8 @@ html {{ {font} }}
             extra = "#night"
         else:
             extra = ""
-        self.hide_while_preserving_layout()
-        self.setZoomFactor(1)
         self.load_url(QUrl(f"{mw.serverURL()}_anki/pages/{name}.html{extra}"))
-        self.inject_dynamic_style_and_show()
+        self.add_dynamic_css_and_classes_then_show()
 
     def force_load_hack(self) -> None:
         """Force process to initialize.
@@ -707,12 +703,14 @@ html {{ {font} }}
     const body = document.body.classList;
     if ({1 if theme_manager.night_mode else 0}) {{
         doc.add("night-mode");
-        body.add("night-mode");
+        body.add("night_mode");
         body.add("nightMode");
+        {"body.add('macos-dark-mode');" if theme_manager.macos_dark_mode() else ""}
     }} else {{
         doc.remove("night-mode");
-        body.remove("night-mode");
+        body.remove("night_mode");
         body.remove("nightMode");
+        body.remove("macos-dark-mode");
     }}
 }})();
 """

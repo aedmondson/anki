@@ -268,12 +268,12 @@ fn template_error_to_anki_error(
     };
     let details = htmlescape::encode_minimal(&localized_template_error(tr, err));
     let more_info = tr.card_template_rendering_more_info();
-    let info = format!(
+    let source = format!(
         "{}<br>{}<br><a href='{}'>{}</a>",
         header, details, TEMPLATE_ERROR_LINK, more_info
     );
 
-    AnkiError::TemplateError(info)
+    AnkiError::TemplateError { info: source }
 }
 
 fn localized_template_error(tr: &I18n, err: TemplateError) -> String {
@@ -397,10 +397,10 @@ impl ParsedTemplate {
     /// Replacements that use only standard filters will become part of
     /// a text node. If a non-standard filter is encountered, a partially
     /// rendered Replacement is returned for the calling code to complete.
-    fn render(&self, context: &RenderContext, tr: &I18n) -> TemplateResult<Vec<RenderedNode>> {
+    fn render(&self, context: &RenderContext, _tr: &I18n) -> TemplateResult<Vec<RenderedNode>> {
         let mut rendered = vec![];
 
-        render_into(&mut rendered, self.0.as_ref(), context, tr)?;
+        render_into(&mut rendered, self.0.as_ref(), context)?;
 
         Ok(rendered)
     }
@@ -410,7 +410,6 @@ fn render_into(
     rendered_nodes: &mut Vec<RenderedNode>,
     nodes: &[ParsedNode],
     context: &RenderContext,
-    tr: &I18n,
 ) -> TemplateResult<()> {
     use ParsedNode::*;
     for node in nodes {
@@ -479,17 +478,17 @@ fn render_into(
             }
             Conditional { key, children } => {
                 if context.evaluate_conditional(key.as_str(), false)? {
-                    render_into(rendered_nodes, children.as_ref(), context, tr)?;
+                    render_into(rendered_nodes, children.as_ref(), context)?;
                 } else {
                     // keep checking for errors, but discard rendered nodes
-                    render_into(&mut vec![], children.as_ref(), context, tr)?;
+                    render_into(&mut vec![], children.as_ref(), context)?;
                 }
             }
             NegatedConditional { key, children } => {
                 if context.evaluate_conditional(key.as_str(), true)? {
-                    render_into(rendered_nodes, children.as_ref(), context, tr)?;
+                    render_into(rendered_nodes, children.as_ref(), context)?;
                 } else {
-                    render_into(&mut vec![], children.as_ref(), context, tr)?;
+                    render_into(&mut vec![], children.as_ref(), context)?;
                 }
             }
         };

@@ -10,21 +10,18 @@ use std::{
 
 use itertools::Itertools;
 use num_integer::Integer;
+use sha1::{Digest, Sha1};
 
 use crate::{
     cloze::contains_cloze,
-    decks::DeckId,
     define_newtype,
-    error::{AnkiError, Result},
-    notetype::{CardGenContext, NoteField, Notetype, NotetypeId},
+    notetype::{CardGenContext, NoteField},
     ops::StateChanges,
     pb,
     pb::note_fields_check_response::State as NoteFieldsState,
     prelude::*,
     template::field_is_empty,
     text::{ensure_string_in_nfc, normalize_to_nfc, strip_html_preserving_media_filenames},
-    timestamp::TimestampSecs,
-    types::Usn,
 };
 
 define_newtype!(NoteId, i64);
@@ -60,11 +57,7 @@ impl Note {
     }
 
     pub fn set_field(&mut self, idx: usize, text: impl Into<String>) -> Result<()> {
-        if idx >= self.fields.len() {
-            return Err(AnkiError::invalid_input(
-                "field idx out of range".to_string(),
-            ));
-        }
+        require!(idx < self.fields.len(), "field idx out of range");
 
         self.fields[idx] = text.into();
         self.mark_dirty();
@@ -78,7 +71,7 @@ impl Collection {
         self.transact(Op::AddNote, |col| {
             let nt = col
                 .get_notetype(note.notetype_id)?
-                .ok_or_else(|| AnkiError::invalid_input("missing note type"))?;
+                .or_invalid("missing note type")?;
             let last_deck = col.get_last_deck_added_to_for_notetype(note.notetype_id);
             let ctx = CardGenContext::new(nt.as_ref(), last_deck, col.usn()?);
             let norm = col.get_config_bool(BoolKey::NormalizeNoteText);
@@ -178,13 +171,11 @@ impl Note {
     pub(crate) fn prepare_for_update(&mut self, nt: &Notetype, normalize_text: bool) -> Result<()> {
         assert!(nt.id == self.notetype_id);
         let notetype_field_count = nt.fields.len().max(1);
-        if notetype_field_count != self.fields.len() {
-            return Err(AnkiError::invalid_input(format!(
-                "note has {} fields, expected {}",
-                self.fields.len(),
-                notetype_field_count
-            )));
-        }
+        require!(
+            notetype_field_count == self.fields.len(),
+            "note has {} fields, expected {notetype_field_count}",
+            self.fields.len()
+        );
 
         for field in self.fields_mut() {
             normalize_field(field, normalize_text);
@@ -300,7 +291,9 @@ impl From<pb::Note> for Note {
 /// Text must be passed to strip_html_preserving_media_filenames() by
 /// caller prior to passing in here.
 pub(crate) fn field_checksum(text: &str) -> u32 {
-    let digest = sha1::Sha1::from(text).digest().bytes();
+    let mut hash = Sha1::new();
+    hash.update(text);
+    let digest = hash.finalize();
     u32::from_be_bytes(digest[..4].try_into().unwrap())
 }
 
@@ -390,14 +383,14 @@ impl Collection {
     }
 
     pub(crate) fn update_note_inner(&mut self, note: &mut Note) -> Result<()> {
-        let mut existing_note = self.storage.get_note(note.id)?.ok_or(AnkiError::NotFound)?;
+        let mut existing_note = self.storage.get_note(note.id)?.or_not_found(note.id)?;
         if !note_differs_from_db(&mut existing_note, note) {
             // nothing to do
             return Ok(());
         }
         let nt = self
             .get_notetype(note.notetype_id)?
-            .ok_or_else(|| AnkiError::invalid_input("missing note type"))?;
+            .or_invalid("missing note type")?;
         let last_deck = self.get_last_deck_added_to_for_notetype(note.notetype_id);
         let ctx = CardGenContext::new(nt.as_ref(), last_deck, self.usn()?);
         let norm = self.get_config_bool(BoolKey::NormalizeNoteText);
@@ -493,9 +486,7 @@ impl Collection {
         let usn = self.usn()?;
 
         for (ntid, group) in &nids_by_notetype.into_iter().group_by(|tup| tup.0) {
-            let nt = self
-                .get_notetype(ntid)?
-                .ok_or_else(|| AnkiError::invalid_input("missing note type"))?;
+            let nt = self.get_notetype(ntid)?.or_invalid("missing note type")?;
 
             let mut genctx = None;
             for (_, nid) in group {
@@ -584,7 +575,7 @@ impl Collection {
     fn field_cloze_check(&mut self, note: &Note) -> Result<NoteFieldsState> {
         let notetype = self
             .get_notetype(note.notetype_id)?
-            .ok_or(AnkiError::NotFound)?;
+            .or_not_found(note.notetype_id)?;
         let cloze_fields = notetype.cloze_fields();
         let mut has_cloze = false;
         let extraneous_cloze = note.fields.iter().enumerate().find_map(|(i, field)| {

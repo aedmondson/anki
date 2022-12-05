@@ -244,7 +244,7 @@ def setupLangAndBackend(
         anki.lang.set_lang(lang)
 
     # switch direction for RTL languages
-    if anki.lang.is_rtl(lang):
+    if anki.lang.is_rtl(lang) and not firstTime:
         app.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
     else:
         app.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
@@ -345,26 +345,19 @@ class AnkiApp(QApplication):
     ##################################################
 
     def eventFilter(self, src: Any, evt: QEvent) -> bool:
-        if evt.type() == QEvent.Type.HoverEnter:
-            if (
-                (
-                    isinstance(
-                        src,
-                        (
-                            QPushButton,
-                            QCheckBox,
-                            QRadioButton,
-                            # classes with PyQt5 compatibility proxy
-                            without_qt5_compat_wrapper(QToolButton),
-                            without_qt5_compat_wrapper(QTabBar),
-                        ),
-                    )
-                )
-                and src.isEnabled()
-                or (
-                    isinstance(src, without_qt5_compat_wrapper(QComboBox))
-                    and not src.isEditable()
-                )
+        pointer_classes = (
+            QPushButton,
+            QCheckBox,
+            QRadioButton,
+            QMenu,
+            # classes with PyQt5 compatibility proxy
+            without_qt5_compat_wrapper(QToolButton),
+            without_qt5_compat_wrapper(QTabBar),
+        )
+        if evt.type() in [QEvent.Type.Enter, QEvent.Type.HoverEnter]:
+            if (isinstance(src, pointer_classes) and src.isEnabled()) or (
+                isinstance(src, without_qt5_compat_wrapper(QComboBox))
+                and not src.isEditable()
             ):
                 self.setOverrideCursor(QCursor(Qt.CursorShape.PointingHandCursor))
             else:

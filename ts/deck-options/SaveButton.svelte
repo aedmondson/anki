@@ -3,6 +3,9 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
+    import * as tr from "@tslib/ftl";
+    import { withCollapsedWhitespace } from "@tslib/i18n";
+    import { getPlatformString } from "@tslib/shortcuts";
     import { createEventDispatcher, tick } from "svelte";
 
     import DropdownDivider from "../components/DropdownDivider.svelte";
@@ -12,20 +15,21 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import Popover from "../components/Popover.svelte";
     import Shortcut from "../components/Shortcut.svelte";
     import WithFloating from "../components/WithFloating.svelte";
-    import * as tr from "../lib/ftl";
-    import { withCollapsedWhitespace } from "../lib/i18n";
-    import { getPlatformString } from "../lib/shortcuts";
     import { chevronDown } from "./icons";
     import type { DeckOptionsState } from "./lib";
+
+    const rtl: boolean = window.getComputedStyle(document.body).direction == "rtl";
 
     const dispatch = createEventDispatcher();
 
     export let state: DeckOptionsState;
 
-    function commitEditing(): void {
+    /// Ensure blur handler has fired so changes get committed.
+    async function commitEditing(): Promise<void> {
         if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();
         }
+        await tick();
     }
 
     async function removeConfig(): Promise<void> {
@@ -53,8 +57,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
     }
 
-    function save(applyToChildDecks: boolean): void {
-        commitEditing();
+    async function save(applyToChildDecks: boolean): Promise<void> {
+        await commitEditing();
         state.save(applyToChildDecks);
     }
 
@@ -67,7 +71,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     primary
     on:click={() => save(false)}
     tooltip={getPlatformString(saveKeyCombination)}
-    --border-left-radius="var(--border-radius)"
+    --border-left-radius={!rtl ? "var(--border-radius)" : "0"}
+    --border-right-radius={rtl ? "var(--border-radius)" : "0"}
 >
     <div class="save">{tr.deckConfigSaveButton()}</div>
 </LabelButton>
@@ -83,7 +88,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         class="chevron"
         slot="reference"
         on:click={() => (showFloating = !showFloating)}
-        --border-right-radius="var(--border-radius)"
+        --border-right-radius={!rtl ? "var(--border-radius)" : "0"}
+        --border-left-radius={rtl ? "var(--border-radius)" : "0"}
         iconSize={80}
     >
         {@html chevronDown}
@@ -109,6 +115,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <style lang="scss">
     .save {
-        margin: 0.2rem 0.75rem;
+        margin: 0 0.75rem;
+    }
+
+    /* Todo: find more elegant fix for misalignment */
+    :global(.chevron) {
+        height: 100% !important;
     }
 </style>

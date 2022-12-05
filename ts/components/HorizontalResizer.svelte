@@ -3,8 +3,12 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
-    import { on } from "../lib/events";
-    import { Callback, singleCallback } from "../lib/typing";
+    import { on } from "@tslib/events";
+    import type { Callback } from "@tslib/typing";
+    import { singleCallback } from "@tslib/typing";
+    import { createEventDispatcher } from "svelte";
+    import { fly } from "svelte/transition";
+
     import IconConstrain from "./IconConstrain.svelte";
     import { horizontalHandle } from "./icons";
     import type { ResizablePane } from "./types";
@@ -12,7 +16,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     export let panes: ResizablePane[];
     export let index = 0;
     export let tip = "";
+    export let showIndicator = false;
     export let clientHeight: number;
+
+    const rtl = window.getComputedStyle(document.body).direction == "rtl";
+
+    const dispatch = createEventDispatcher();
 
     let destroy: Callback;
 
@@ -77,18 +86,31 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
         destroy = singleCallback(
             on(window, "pointermove", onMove),
-            on(window, "pointerup", releasePointer),
+            on(window, "pointerup", () => {
+                releasePointer.call(window);
+                dispatch("release");
+            }),
         );
     }
 </script>
 
 <div
     class="horizontal-resizer"
+    class:rtl
     title={tip}
     bind:clientHeight={resizerHeight}
     on:pointerdown|preventDefault={lockPointer}
-    on:dblclick
+    on:dblclick|preventDefault
 >
+    {#if showIndicator}
+        <div
+            class="resize-indicator"
+            transition:fly={{ x: rtl ? 25 : -25, duration: 200 }}
+        >
+            <slot />
+        </div>
+    {/if}
+
     <div class="drag-handle">
         <IconConstrain iconSize={80}>{@html horizontalHandle}</IconConstrain>
     </div>
@@ -99,7 +121,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         width: 100%;
         cursor: row-resize;
         position: relative;
-        height: 10px;
+        height: 25px;
         border-top: 1px solid var(--border);
 
         z-index: 20;
@@ -112,6 +134,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
         &:hover .drag-handle {
             opacity: 0.8;
+        }
+
+        .resize-indicator {
+            position: absolute;
+            font-size: small;
+            bottom: 0;
+        }
+        &.rtl .resize-indicator {
+            padding: 0.5rem 0 0 0.5rem;
+            right: 0;
         }
     }
 </style>

@@ -34,7 +34,9 @@ impl TimestampSecs {
     #[cfg(windows)]
     pub(crate) fn local_datetime(self) -> Result<DateTime<Local>> {
         std::panic::catch_unwind(|| Local.timestamp(self.0, 0))
-            .map_err(|_err| AnkiError::invalid_input("invalid date"))
+            // discard error as it doesn't satisfiy trait bounds
+            .ok()
+            .or_invalid("invalid date")
     }
 
     #[cfg(not(windows))]
@@ -85,12 +87,12 @@ impl TimestampMillis {
 
 fn elapsed() -> time::Duration {
     if *crate::PYTHON_UNIT_TESTS {
-        // shift clock around rollover time to accomodate Python tests that make bad assumptions.
+        // shift clock around rollover time to accommodate Python tests that make bad assumptions.
         // we should update the tests in the future and remove this hack.
         let mut elap = time::SystemTime::now()
             .duration_since(time::SystemTime::UNIX_EPOCH)
             .unwrap();
-        let now = Utc::now();
+        let now = Local::now();
         if now.hour() >= 2 && now.hour() < 4 {
             elap -= time::Duration::from_secs(60 * 60 * 2);
         }

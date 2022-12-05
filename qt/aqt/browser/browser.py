@@ -71,7 +71,7 @@ from aqt.utils import (
 from ..changenotetype import change_notetype_dialog
 from .card_info import BrowserCardInfo
 from .find_and_replace import FindAndReplaceDialog
-from .layout import BrowserLayout
+from .layout import BrowserLayout, QSplitterHandleEventFilter
 from .previewer import BrowserPreviewer as PreviewDialog
 from .previewer import Previewer
 from .sidebar import SidebarTreeView
@@ -126,19 +126,30 @@ class Browser(QMainWindow):
         self._closeEventHasCleanedUp = False
         self.form = aqt.forms.browser.Ui_Dialog()
         self.form.setupUi(self)
-        restoreGeom(self, "editor", 0)
-        restoreSplitter(self.form.splitter, "editor3")
         self.form.splitter.setChildrenCollapsible(False)
+        splitter_handle_event_filter = QSplitterHandleEventFilter(self.form.splitter)
+        self.form.splitter.handle(1).installEventFilter(splitter_handle_event_filter)
         # set if exactly 1 row is selected; used by the previewer
         self.card: Card | None = None
         self.current_card: Card | None = None
         self.setupSidebar()
-        # make sure to call restoreState() after QDockWidget is attached to QMainWindow
-        restoreState(self, "editor")
         self.setup_table()
         self.setupMenus()
         self.setupHooks()
         self.setupEditor()
+        gui_hooks.browser_will_show(self)
+
+        # restoreXXX() should be called after all child widgets have been created
+        # and attached to QMainWindow
+        self._editor_state_key = (
+            "editorRTL"
+            if self.layoutDirection() == Qt.LayoutDirection.RightToLeft
+            else "editor"
+        )
+        restoreGeom(self, self._editor_state_key, 0)
+        restoreSplitter(self.form.splitter, "editor3")
+        restoreState(self, self._editor_state_key)
+
         # responsive layout
         self.aspect_ratio = self.width() / self.height()
         self.set_layout(self.mw.pm.browser_layout(), True)
@@ -146,7 +157,6 @@ class Browser(QMainWindow):
         self.on_undo_state_change(mw.undo_actions_info())
         # legacy alias
         self.model = MockModel(self)
-        gui_hooks.browser_will_show(self)
         self.setupSearch(card, search)
         self.show()
 
@@ -343,8 +353,8 @@ class Browser(QMainWindow):
         self.table.cleanup()
         self.sidebar.cleanup()
         saveSplitter(self.form.splitter, "editor3")
-        saveGeom(self, "editor")
-        saveState(self, "editor")
+        saveGeom(self, self._editor_state_key)
+        saveState(self, self._editor_state_key)
         self.teardownHooks()
         self.mw.maybeReset()
         aqt.dialogs.markClosed("Browser")
@@ -420,7 +430,7 @@ class Browser(QMainWindow):
         """
 
         self._lastSearchTxt = search
-        prompt = search if prompt == None else prompt
+        prompt = search if prompt is None else prompt
         self.form.searchEdit.setCurrentIndex(-1)
         self.form.searchEdit.lineEdit().setText(prompt)
         self.search()

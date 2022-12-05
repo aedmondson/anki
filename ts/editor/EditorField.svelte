@@ -23,7 +23,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         editingArea: EditingAreaAPI;
     }
 
-    import { registerPackage } from "../lib/runtime-require";
+    import { registerPackage } from "@tslib/runtime-require";
+
     import contextProperty from "../sveltelib/context-property";
     import lifecycleHooks from "../sveltelib/lifecycle-hooks";
 
@@ -42,13 +43,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 </script>
 
 <script lang="ts">
+    import { collapsedKey, directionKey } from "@tslib/context-keys";
+    import { promiseWithResolver } from "@tslib/promise";
     import { onDestroy, setContext } from "svelte";
     import type { Writable } from "svelte/store";
     import { writable } from "svelte/store";
 
     import Collapsible from "../components/Collapsible.svelte";
-    import { collapsedKey, directionKey } from "../lib/context-keys";
-    import { promiseWithResolver } from "../lib/promise";
     import type { Destroyable } from "./destroyable";
     import EditingArea from "./EditingArea.svelte";
 
@@ -56,6 +57,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     export let field: FieldData;
     export let collapsed = false;
     export let flipInputs = false;
+    export let dupe = false;
 
     const directionStore = writable<"ltr" | "rtl">();
     setContext(directionKey, directionStore);
@@ -89,7 +91,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     <slot name="field-label" />
 
     <Collapsible collapse={collapsed} let:collapsed={hidden}>
-        <div use:elementResolve class="editor-field" on:focusin on:focusout {hidden}>
+        <div
+            use:elementResolve
+            class="editor-field"
+            class:dupe
+            on:focusin
+            on:focusout
+            {hidden}
+        >
             <EditingArea
                 {content}
                 fontFamily={field.fontFamily}
@@ -109,9 +118,32 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 </div>
 
 <style lang="scss">
+    @use "sass/elevation" as *;
+
+    /* Make sure labels are readable on custom Qt backgrounds */
+    .field-container {
+        background: var(--canvas);
+        border-radius: var(--border-radius);
+        overflow: hidden;
+    }
+
     .editor-field {
-        position: relative;
-        padding: 0 3px;
-        --border-color: var(--border);
+        overflow: hidden;
+        /* make room for thicker focus border */
+        margin: 1px;
+
+        border-radius: 5px;
+        border: 1px solid var(--border);
+
+        @include elevation(1);
+
+        outline-offset: -1px;
+        &.dupe,
+        &.dupe:focus-within {
+            outline: 2px solid var(--accent-danger);
+        }
+        &:focus-within {
+            outline: 2px solid var(--border-focus);
+        }
     }
 </style>

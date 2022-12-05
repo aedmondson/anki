@@ -3,7 +3,8 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script context="module" lang="ts">
-    import { registerPackage } from "../../lib/runtime-require";
+    import { registerPackage } from "@tslib/runtime-require";
+
     import lifecycleHooks from "../../sveltelib/lifecycle-hooks";
     import type { CodeMirrorAPI } from "../CodeMirror.svelte";
     import type { EditingInputAPI, FocusableInputAPI } from "../EditingArea.svelte";
@@ -28,10 +29,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 </script>
 
 <script lang="ts">
+    import { singleCallback } from "@tslib/typing";
     import { onMount, tick } from "svelte";
     import { writable } from "svelte/store";
 
-    import { singleCallback } from "../../lib/typing";
     import { pageTheme } from "../../sveltelib/theme";
     import { baseOptions, gutterOptions, htmlanki } from "../code-mirror";
     import CodeMirror from "../CodeMirror.svelte";
@@ -40,9 +41,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import removeProhibitedTags from "./remove-prohibited";
     import { storedToUndecorated, undecoratedToStored } from "./transform";
 
-    export let isDefault: boolean;
     export let hidden = false;
-    export let richTextHidden: boolean;
 
     $: configuration = {
         mode: htmlanki,
@@ -147,8 +146,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <div
     class="plain-text-input"
     class:light-theme={!$pageTheme.isDark}
-    class:is-default={isDefault}
-    class:alone={richTextHidden}
     on:focusin={() => ($focusedInput = api)}
     {hidden}
 >
@@ -163,35 +160,20 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <style lang="scss">
     .plain-text-input {
-        border-top: 1px solid var(--border);
-        border-radius: 0 0 5px 5px;
+        height: 100%;
 
         :global(.CodeMirror) {
+            height: 100%;
             background: var(--canvas-code);
-            border-radius: 0 0 5px 5px;
-        }
-
-        &.is-default {
-            border-top: none;
-            border-bottom: 1px solid var(--border);
-            border-radius: 5px 5px 0 0;
-
-            :global(.CodeMirror) {
-                border-radius: 5px 5px 0 0;
-            }
-        }
-
-        &.alone {
-            border: none;
-            border-radius: 5px;
-
-            :global(.CodeMirror) {
-                border-radius: 5px;
-            }
+            padding-inline: 4px;
         }
 
         :global(.CodeMirror-lines) {
             padding: 8px 0;
+        }
+
+        :global(.CodeMirror-gutters) {
+            background: var(--canvas-code);
         }
     }
 </style>

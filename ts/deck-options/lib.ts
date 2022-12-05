@@ -1,11 +1,12 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { localeCompare } from "@tslib/i18n";
+import { DeckConfig, deckConfig } from "@tslib/proto";
 import { cloneDeep, isEqual } from "lodash-es";
-import { get, Readable, readable, Writable, writable } from "svelte/store";
+import type { Readable, Writable } from "svelte/store";
+import { get, readable, writable } from "svelte/store";
 
-import { localeCompare } from "../lib/i18n";
-import { DeckConfig, deckConfig } from "../lib/proto";
 import type { DynamicSvelteComponent } from "../sveltelib/dynamicComponent";
 
 export type DeckOptionsId = number;
@@ -39,7 +40,6 @@ export class DeckOptionsState {
     readonly defaults: DeckConfig.DeckConfig.Config;
     readonly addonComponents: Writable<DynamicSvelteComponent[]>;
     readonly v3Scheduler: boolean;
-    readonly haveAddons: boolean;
 
     private targetDeckId: number;
     private configs: ConfigWithCount[];
@@ -66,8 +66,8 @@ export class DeckOptionsState {
             0,
             this.configs.findIndex((c) => c.config.id === this.currentDeck.configId),
         );
+        this.sortConfigs();
         this.v3Scheduler = data.v3Scheduler;
-        this.haveAddons = data.haveAddons;
         this.cardStateCustomizer = writable(data.cardStateCustomizer);
         this.deckLimits = writable(data.currentDeck?.limits ?? createLimits());
 
@@ -118,6 +118,7 @@ export class DeckOptionsState {
         if (config.id) {
             this.modifiedConfigs.add(config.id);
         }
+        this.sortConfigs();
         this.updateConfigList();
     }
 
@@ -142,6 +143,7 @@ export class DeckOptionsState {
         const configWithCount = { config, useCount: 0 };
         this.configs.push(configWithCount);
         this.selectedIdx = this.configs.length - 1;
+        this.sortConfigs();
         this.updateCurrentConfig();
         this.updateConfigList();
     }
@@ -177,8 +179,8 @@ export class DeckOptionsState {
             .map((c) => c.config)
             .filter((c, idx) => {
                 return (
-                    idx !== this.selectedIdx &&
-                    (c.id === 0 || this.modifiedConfigs.has(c.id))
+                    idx !== this.selectedIdx
+                    && (c.id === 0 || this.modifiedConfigs.has(c.id))
                 );
             });
         const configs = [
@@ -256,6 +258,14 @@ export class DeckOptionsState {
         return bytesToObject(conf.other);
     }
 
+    private sortConfigs() {
+        const currentConfigName = this.configs[this.selectedIdx].config.name;
+        this.configs.sort((a, b) => localeCompare(a.config.name, b.config.name, { sensitivity: "base" }));
+        this.selectedIdx = this.configs.findIndex(
+            (c) => c.config.name == currentConfigName,
+        );
+    }
+
     private getConfigList(): ConfigListEntry[] {
         const list: ConfigListEntry[] = this.configs.map((c, idx) => {
             const useCount = c.useCount + (idx === this.selectedIdx ? 1 : 0);
@@ -266,22 +276,17 @@ export class DeckOptionsState {
                 useCount,
             };
         });
-        list.sort((a, b) => localeCompare(a.name, b.name, { sensitivity: "base" }));
         return list;
     }
 
     private getParentLimits(): ParentLimits {
-        const parentConfigs = this.configs.filter((c) =>
-            this.currentDeck.parentConfigIds.includes(c.config.id),
-        );
+        const parentConfigs = this.configs.filter((c) => this.currentDeck.parentConfigIds.includes(c.config.id));
         const newCards = parentConfigs.reduce(
-            (previous, current) =>
-                Math.min(previous, current.config.config?.newPerDay ?? 0),
+            (previous, current) => Math.min(previous, current.config.config?.newPerDay ?? 0),
             2 ** 31,
         );
         const reviews = parentConfigs.reduce(
-            (previous, current) =>
-                Math.min(previous, current.config.config?.reviewsPerDay ?? 0),
+            (previous, current) => Math.min(previous, current.config.config?.reviewsPerDay ?? 0),
             2 ** 31,
         );
         return {

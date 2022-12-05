@@ -16,7 +16,7 @@ import tempfile
 import time
 from contextlib import contextmanager
 from hashlib import sha1
-from typing import Any, Callable, Iterable, Iterator, no_type_check
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator
 
 from anki._legacy import DeprecatedNamesMixinForModule
 from anki.dbproxy import DBProxy
@@ -307,7 +307,7 @@ def version_with_build() -> str:
 def point_version() -> int:
     from anki.buildinfo import version
 
-    return int(version.split(".")[-1])
+    return int(version.rsplit(".", maxsplit=1)[-1])
 
 
 # keep the legacy alias around without a deprecation warning for now
@@ -324,6 +324,7 @@ _deprecated_names.register_deprecated_aliases(
 _deprecated_names.register_deprecated_attributes(json=((_json, "_json"), None))
 
 
-@no_type_check
-def __getattr__(name: str) -> Any:
-    return _deprecated_names.__getattr__(name)
+if not TYPE_CHECKING:
+
+    def __getattr__(name: str) -> Any:
+        return _deprecated_names.__getattr__(name)

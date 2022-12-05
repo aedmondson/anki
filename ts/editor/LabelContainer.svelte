@@ -3,9 +3,9 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
+    import * as tr from "@tslib/ftl";
     import { createEventDispatcher } from "svelte";
 
-    import * as tr from "../lib/ftl";
     import CollapseBadge from "./CollapseBadge.svelte";
 
     export let collapsed: boolean;
@@ -20,7 +20,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 </script>
 
-<div class="label-container" on:mousedown|preventDefault>
+<div class="label-container">
     <span
         class="clickable"
         title={tooltip}
@@ -38,11 +38,14 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .label-container {
         display: flex;
         justify-content: space-between;
+        background: var(--canvas);
+        border-top-right-radius: var(--border-radius);
+        border-top-left-radius: var(--border-radius);
         padding: 0 3px 1px;
 
         position: sticky;
         top: 0;
-        z-index: 10;
+        z-index: 50;
 
         .clickable {
             cursor: pointer;

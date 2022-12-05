@@ -18,9 +18,9 @@ pub(super) fn open_or_create<P: AsRef<Path>>(path: P) -> Result<Connection> {
         db.trace(Some(trace));
     }
 
-    db.pragma_update(None, "page_size", &4096)?;
-    db.pragma_update(None, "legacy_file_format", &false)?;
-    db.pragma_update_and_check(None, "journal_mode", &"wal", |_| Ok(()))?;
+    db.pragma_update(None, "page_size", 4096)?;
+    db.pragma_update(None, "legacy_file_format", false)?;
+    db.pragma_update_and_check(None, "journal_mode", "wal", |_| Ok(()))?;
 
     initial_db_setup(&mut db)?;
 
@@ -266,23 +266,23 @@ fn row_to_name_and_checksum(row: &Row) -> Result<(String, Sha1Hash)> {
     let file_name = row.get(0)?;
     let sha1_str: String = row.get(1)?;
     let mut sha1 = [0; 20];
-    hex::decode_to_slice(sha1_str, &mut sha1)
-        .map_err(|_| AnkiError::invalid_input(format!("bad media checksum: {file_name}")))?;
+    if let Err(err) = hex::decode_to_slice(sha1_str, &mut sha1) {
+        invalid_input!(err, "bad media checksum: {file_name}");
+    }
     Ok((file_name, sha1))
 }
 
 #[cfg(test)]
 mod test {
-    use tempfile::NamedTempFile;
-
     use crate::{
         error::Result,
+        io::new_tempfile,
         media::{database::MediaEntry, files::sha1_of_data, MediaManager},
     };
 
     #[test]
     fn database() -> Result<()> {
-        let db_file = NamedTempFile::new()?;
+        let db_file = new_tempfile()?;
         let db_file_path = db_file.path().to_str().unwrap();
         let mut mgr = MediaManager::new("/dummy", db_file_path)?;
         let mut ctx = mgr.dbctx();

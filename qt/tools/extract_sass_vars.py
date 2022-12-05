@@ -1,29 +1,37 @@
 #!/usr/bin/env python3
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
-
 import json
 import re
 import sys
 
 # bazel genrule "srcs"
-vars_css = sys.argv[1]
+root_vars_css = sys.argv[1]
 
 # bazel genrule "outs"
 colors_py = sys.argv[2]
 props_py = sys.argv[3]
 
-colors = {}
-props = {}
+colors: dict[str, dict[str, str]] = {}
+props: dict[str, dict[str, str]] = {}
 reached_props = False
+comment = ""
 
-for line in re.split(r"[;\{\}]", open(vars_css).read()):
+with open(root_vars_css) as f:
+    data = f.read()
+for line in re.split(r"[;\{\}]|\*\/", data):
     line = line.strip()
 
     if not line:
         continue
-    if "props" in line:
-        reached_props = True
+    if line.startswith("/*!"):
+        if "props" in line:
+            reached_props = True
+        elif "rest" in line:
+            break
+        else:
+            comment = re.match(r"\/\*!\s*(.*)$", line)[1]
+        continue
 
     m = re.match(r"--(.+):(.+)$", line)
 
@@ -34,43 +42,52 @@ for line in re.split(r"[;\{\}]", open(vars_css).read()):
             and "Copyright" not in line
             and "License" not in line
             and "color-scheme" not in line
+            and "sourceMappingURL" not in line
         ):
             print("failed to match", line)
         continue
 
-    var = m.group(1)
+    var = m.group(1).replace("-", "_").upper()
     val = m.group(2)
 
     if reached_props:
-        props.setdefault(var, []).append(val)
+        if not var in props:
+            props.setdefault(var, {})["comment"] = comment
+            props[var]["light"] = val
+        else:
+            props[var]["dark"] = val
     else:
-        colors.setdefault(var, []).append(val)
+        if not var in colors:
+            colors.setdefault(var, {})["comment"] = comment
+            colors[var]["light"] = val
+        else:
+            colors[var]["dark"] = val
+
+    comment = ""
 
 
 copyright_notice = """\
 # Copyright: Ankitects Pty Ltd and contributors
-# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html\n
 """
 
 with open(colors_py, "w") as buf:
     buf.write(copyright_notice)
-    buf.write("# this file is auto-generated from _vars.scss and _colors.scss\n")
+    buf.write("# This file was automatically generated from _root-vars.scss\n")
 
     for color, val in colors.items():
-        day = val[0]
-        night = val[1] if len(val) > 1 else day
+        if not "dark" in val:
+            val["dark"] = val["light"]
 
-        color = color.replace("-", "_").upper()
-        buf.write(f'{color} = ("{day}", "{night}")\n')
+        buf.write(re.sub(r"\"\n", '",\n', f"{color} = {json.dumps(val, indent=4)}\n"))
 
 
 with open(props_py, "w") as buf:
     buf.write(copyright_notice)
-    buf.write("# this file is auto-generated from _vars.scss\n")
+    buf.write("# This file was automatically generated from _root-vars.scss\n")
 
     for prop, val in props.items():
-        day = val[0]
-        night = val[1] if len(val) > 1 else day
+        if not "dark" in val:
+            val["dark"] = val["light"]
 
-        prop = prop.replace("-", "_").upper()
-        buf.write(f'{prop} = ("{day}", "{night}")\n')
+        buf.write(re.sub(r"\"\n", '",\n', f"{prop} = {json.dumps(val, indent=4)}\n"))

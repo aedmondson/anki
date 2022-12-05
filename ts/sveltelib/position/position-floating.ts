@@ -1,27 +1,13 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import type {
-    ComputePositionConfig,
-    FloatingElement,
-    Middleware,
-    Placement,
-    ReferenceElement,
-} from "@floating-ui/dom";
-import {
-    arrow,
-    autoPlacement,
-    computePosition,
-    hide,
-    inline,
-    offset,
-    shift,
-} from "@floating-ui/dom";
+import type { ComputePositionConfig, FloatingElement, Middleware, Placement, ReferenceElement } from "@floating-ui/dom";
+import { arrow, computePosition, flip, hide, inline, offset, shift } from "@floating-ui/dom";
 
 import type { PositionAlgorithm } from "./position-algorithm";
 
 export interface PositionFloatingArgs {
-    placement: Placement | Placement[] | "auto";
+    placement: Placement;
     arrow: HTMLElement;
     shift: number;
     offset: number;
@@ -41,11 +27,12 @@ function positionFloating({
     hideIfReferenceHidden,
     hideCallback,
 }: PositionFloatingArgs): PositionAlgorithm {
-    return async function (
+    return async function(
         reference: ReferenceElement,
         floating: FloatingElement,
-    ): Promise<void> {
+    ): Promise<Placement> {
         const middleware: Middleware[] = [
+            flip(),
             offset(offsetArg),
             shift({ padding: shiftArg }),
             arrow({ element: arrowElement, padding: 5 }),
@@ -57,17 +44,8 @@ function positionFloating({
 
         const computeArgs: Partial<ComputePositionConfig> = {
             middleware,
+            placement,
         };
-
-        if (Array.isArray(placement)) {
-            const allowedPlacements = placement;
-
-            middleware.push(autoPlacement({ allowedPlacements }));
-        } else if (placement === "auto") {
-            middleware.push(autoPlacement());
-        } else {
-            computeArgs.placement = placement;
-        }
 
         if (hideIfEscaped) {
             middleware.push(hide({ strategy: "escaped" }));
@@ -85,11 +63,13 @@ function positionFloating({
         } = await computePosition(reference, floating, computeArgs);
 
         if (middlewareData.hide?.escaped) {
-            return hideCallback("escaped");
+            hideCallback("escaped");
+            return computedPlacement;
         }
 
         if (middlewareData.hide?.referenceHidden) {
-            return hideCallback("referenceHidden");
+            hideCallback("referenceHidden");
+            return computedPlacement;
         }
 
         Object.assign(floating.style, {
@@ -124,6 +104,8 @@ function positionFloating({
             top: arrowY ? `${arrowY}px` : "",
             transform: `rotate(${rotation}deg)`,
         });
+
+        return computedPlacement;
     };
 }
 

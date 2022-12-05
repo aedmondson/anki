@@ -15,11 +15,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 </script>
 
 <script lang="ts">
+    import { directionKey } from "@tslib/context-keys";
+    import { promiseWithResolver } from "@tslib/promise";
     import { createEventDispatcher, getContext, onMount } from "svelte";
     import type { Writable } from "svelte/store";
 
-    import { directionKey } from "../lib/context-keys";
-    import { promiseWithResolver } from "../lib/promise";
     import { pageTheme } from "../sveltelib/theme";
     import {
         darkTheme,
@@ -34,6 +34,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     const defaultConfiguration = {
         rtlMoveVisually: true,
+        lineNumbers: false,
     };
 
     const [editorPromise, resolve] = promiseWithResolver<CodeMirrorLib.Editor>();
@@ -98,6 +99,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <style lang="scss">
     .code-mirror {
+        height: 100%;
+
         :global(.CodeMirror) {
             height: auto;
         }

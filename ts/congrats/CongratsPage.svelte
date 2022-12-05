@@ -3,11 +3,12 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
+    import { bridgeLink } from "@tslib/bridgecommand";
+    import * as tr from "@tslib/ftl";
+    import type { Scheduler } from "@tslib/proto";
+
     import Col from "../components/Col.svelte";
     import Container from "../components/Container.svelte";
-    import { bridgeLink } from "../lib/bridgecommand";
-    import * as tr from "../lib/ftl";
-    import type { Scheduler } from "../lib/proto";
     import { buildNextLearnMsg } from "./lib";
 
     export let info: Scheduler.CongratsInfoResponse;
@@ -29,7 +30,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <Container --gutter-block="1rem" --gutter-inline="2px" breakpoint="sm">
     <Col --col-justify="center">
         <div class="congrats">
-            <h3>{congrats}</h3>
+            <h1>{congrats}</h1>
 
             <p>{nextLearnMsg}</p>
 
@@ -66,16 +67,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <style lang="scss">
     .congrats {
+        margin-top: 2em;
         max-width: 30em;
-        font-size: var(--base-font-size);
+        font-size: var(--font-size);
 
         :global(a) {
-            color: var(--accent-link);
+            color: var(--fg-link);
             text-decoration: none;
-        }
-
-        h3 {
-            font-weight: bold;
         }
     }
 

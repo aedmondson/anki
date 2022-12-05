@@ -662,14 +662,15 @@ class Reviewer:
 <center id=outer>
 <table id=innertable width=100%% cellspacing=0 cellpadding=0>
 <tr>
-<td align=left width=50 valign=top class=stat>
-<br>
+<td align=left valign=top class=stat>
 <button title="%(editkey)s" onclick="pycmd('edit');">%(edit)s</button></td>
 <td align=center valign=top id=middle>
 </td>
-<td width=50 align=right valign=top class=stat><span id=time class=stattxt>
-</span><br>
-<button onclick="pycmd('more');">%(more)s %(downArrow)s</button>
+<td align=right valign=top class=stat>
+<button title="%(morekey)s" onclick="pycmd('more');">
+%(more)s %(downArrow)s
+<span id=time class=stattxt></span>
+</button>
 </td>
 </tr>
 </table>
@@ -678,21 +679,20 @@ class Reviewer:
 time = %(time)d;
 </script>
 """ % dict(
-            rem=self._remaining(),
             edit=tr.studying_edit(),
             editkey=tr.actions_shortcut_key(val="E"),
             more=tr.studying_more(),
+            morekey=tr.actions_shortcut_key(val="M"),
             downArrow=downArrow(),
             time=self.card.time_taken() // 1000,
         )
 
     def _showAnswerButton(self) -> None:
         middle = """
-<span class=stattxt>{}</span><br>
-<button title="{}" id="ansbut" onclick='pycmd("ans");'>{}</button>""".format(
-            self._remaining(),
+<button title="{}" id="ansbut" onclick='pycmd("ans");'>{}<span class=stattxt>{}</span></button>""".format(
             tr.actions_shortcut_key(val=tr.studying_space()),
             tr.studying_show_answer(),
+            self._remaining(),
         )
         # wrap it in a table so it has the same top margin as the ease buttons
         middle = (
@@ -782,30 +782,31 @@ time = %(time)d;
                 extra = ""
             due = self._buttonTime(i, v3_labels=labels)
             return """
-<td align=center>%s<button %s title="%s" data-ease="%s" onclick='pycmd("ease%d");'>\
-%s</button></td>""" % (
-                due,
+<td align=center><button %s title="%s" data-ease="%s" onclick='pycmd("ease%d");'>\
+%s%s</button></td>""" % (
                 extra,
                 tr.actions_shortcut_key(val=i),
                 i,
                 i,
                 label,
+                due,
             )
 
-        buf = "<center><table cellpading=0 cellspacing=0><tr>"
+        buf = "<center><table cellpadding=0 cellspacing=0><tr>"
         for ease, label in self._answerButtonList():
             buf += but(ease, label)
         buf += "</tr></table>"
         return buf
 
     def _buttonTime(self, i: int, v3_labels: Sequence[str] | None = None) -> str:
-        if not self.mw.col.conf["estTimes"]:
-            return "<div class=spacer></div>"
-        if v3_labels:
-            txt = v3_labels[i - 1]
+        if self.mw.col.conf["estTimes"]:
+            if v3_labels:
+                txt = v3_labels[i - 1]
+            else:
+                txt = self.mw.col.sched.nextIvlStr(self.card, i, True) or ""
+            return f"""<span class="nobold">{txt}</span>"""
         else:
-            txt = self.mw.col.sched.nextIvlStr(self.card, i, True) or "&nbsp;"
-        return f"<span class=nobold>{txt}</span><br>"
+            return ""
 
     # Leeches
     ##########################################################################

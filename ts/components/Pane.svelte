@@ -6,7 +6,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import { createEventDispatcher } from "svelte";
     import { writable } from "svelte/store";
 
-    import { resizable, Resizer } from "./resizable";
+    import type { Resizer } from "./resizable";
+    import { resizable } from "./resizable";
 
     export let baseSize = 600;
 
@@ -59,5 +60,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     .pane {
         @include panes.resizable(column, true, true);
+        opacity: var(--opacity, 1);
     }
 </style>

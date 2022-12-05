@@ -3,8 +3,13 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
+    import { hasBlockAttribute } from "@tslib/dom";
+    import { on } from "@tslib/events";
+    import { promiseWithResolver } from "@tslib/promise";
+    import type { Callback } from "@tslib/typing";
+    import { singleCallback } from "@tslib/typing";
     import type CodeMirrorLib from "codemirror";
-    import { onMount, tick } from "svelte";
+    import { tick } from "svelte";
     import { writable } from "svelte/store";
 
     import Popover from "../../components/Popover.svelte";
@@ -14,22 +19,55 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import { placeCaretAfter } from "../../domlib/place-caret";
     import { escapeSomeEntities, unescapeSomeEntities } from "../../editable/mathjax";
     import { Mathjax } from "../../editable/mathjax-element";
-    import { hasBlockAttribute } from "../../lib/dom";
-    import { on } from "../../lib/events";
-    import { noop } from "../../lib/functional";
-    import type { Callback } from "../../lib/typing";
-    import { singleCallback } from "../../lib/typing";
+    import type { EditingInputAPI } from "../EditingArea.svelte";
     import HandleBackground from "../HandleBackground.svelte";
-    import { context } from "../rich-text-input";
+    import { context } from "../NoteEditor.svelte";
+    import type { RichTextInputAPI } from "../rich-text-input";
+    import { editingInputIsRichText } from "../rich-text-input";
     import MathjaxButtons from "./MathjaxButtons.svelte";
     import MathjaxEditor from "./MathjaxEditor.svelte";
 
-    const { editable, element, preventResubscription } = context.get();
+    const { focusedInput } = context.get();
+
+    let cleanup: Callback;
+    let richTextInput: RichTextInputAPI | null = null;
+    let allowPromise = Promise.resolve();
+
+    async function initialize(input: EditingInputAPI | null): Promise<void> {
+        cleanup?.();
+
+        const isRichText = input && editingInputIsRichText(input);
+
+        // Setup the new field, so that clicking from one mathjax to another
+        // will immediately open the overlay
+        if (isRichText) {
+            const container = await input.element;
+
+            cleanup = singleCallback(
+                on(container, "click", showOverlayIfMathjaxClicked),
+                on(container, "movecaretafter" as any, showOnAutofocus),
+                on(container, "selectall" as any, showSelectAll),
+            );
+        }
+
+        // Wait if the mathjax overlay is still active
+        await allowPromise;
+
+        if (!isRichText) {
+            richTextInput = null;
+            return;
+        }
+
+        richTextInput = input;
+    }
+
+    $: initialize($focusedInput);
 
     let activeImage: HTMLImageElement | null = null;
     let mathjaxElement: HTMLElement | null = null;
-    let allow = noop;
-    let unsubscribe = noop;
+
+    let allowResubscription: Callback;
+    let unsubscribe: Callback;
 
     let selectAll = false;
     let position: CodeMirrorLib.Position | undefined = undefined;
@@ -40,8 +78,15 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
      */
     const code = writable("");
 
-    function showOverlay(image: HTMLImageElement, pos?: CodeMirrorLib.Position): void {
-        allow = preventResubscription();
+    function showOverlay(image: HTMLImageElement, pos?: CodeMirrorLib.Position) {
+        const [promise, allowResolve] = promiseWithResolver<void>();
+
+        allowPromise = promise;
+        allowResubscription = singleCallback(
+            richTextInput!.preventResubscription(),
+            allowResolve,
+        );
+
         position = pos;
 
         /* Setting the activeImage and mathjaxElement to a non-nullish value is
@@ -56,7 +101,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     function placeHandle(after: boolean): void {
-        editable.focusHandler.flushCaret();
+        richTextInput!.editable.focusHandler.flushCaret();
 
         if (after) {
             (mathjaxElement as any).placeCaretAfter();
@@ -69,42 +114,42 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         selectAll = false;
         position = undefined;
 
+        allowResubscription?.();
+
         if (activeImage && mathjaxElement) {
-            unsubscribe();
-            activeImage = null;
-            mathjaxElement = null;
+            clear();
         }
+    }
 
-        allow();
-
-        // Wait for a tick, so that moving from one Mathjax element to
-        // another will remount the MathjaxEditor
-        await tick();
+    function clear(): void {
+        unsubscribe();
+        activeImage = null;
+        mathjaxElement = null;
     }
 
     let errorMessage: string;
-    let cleanup: Callback | null = null;
+    let cleanupImageError: Callback | null = null;
 
     async function updateErrorMessage(): Promise<void> {
         errorMessage = activeImage!.title;
     }
 
     async function updateImageErrorCallback(image: HTMLImageElement | null) {
-        cleanup?.();
-        cleanup = null;
+        cleanupImageError?.();
+        cleanupImageError = null;
 
         if (!image) {
             return;
         }
 
-        cleanup = on(image, "resize", updateErrorMessage);
+        cleanupImageError = on(image, "resize", updateErrorMessage);
     }
 
     $: updateImageErrorCallback(activeImage);
 
     async function showOverlayIfMathjaxClicked({ target }: Event): Promise<void> {
         if (target instanceof HTMLImageElement && target.dataset.anki === "mathjax") {
-            await resetHandle();
+            resetHandle();
             showOverlay(target);
         }
     }
@@ -132,16 +177,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         showOverlay(detail);
     }
 
-    onMount(async () => {
-        const container = await element;
-
-        return singleCallback(
-            on(container, "click", showOverlayIfMathjaxClicked),
-            on(container, "movecaretafter" as any, showOnAutofocus),
-            on(container, "selectall" as any, showSelectAll),
-        );
-    });
-
     let isBlock: boolean;
     $: isBlock = mathjaxElement ? hasBlockAttribute(mathjaxElement) : false;
 
@@ -167,7 +202,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         >
             <WithFloating
                 reference={activeImage}
-                placement="auto"
                 offset={20}
                 keepOnKeyup
                 let:position={positionFloating}
@@ -180,27 +214,28 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                         {code}
                         {selectAll}
                         {position}
-                        on:moveoutstart={async () => {
+                        on:moveoutstart={() => {
                             placeHandle(false);
-                            await resetHandle();
+                            resetHandle();
                         }}
-                        on:moveoutend={async () => {
+                        on:moveoutend={() => {
                             placeHandle(true);
-                            await resetHandle();
+                            resetHandle();
                         }}
                         on:tab={async () => {
                             // Instead of resetting on blur, we reset on tab
                             // Otherwise, when clicking from Mathjax element to another,
                             // the user has to click twice (focus is called before blur?)
-                            await resetHandle();
+                            resetHandle();
                         }}
+                        on:close={resetHandle}
                         let:editor={mathjaxEditor}
                     >
                         <Shortcut
                             keyCombination={acceptShortcut}
-                            on:action={async () => {
+                            on:action={() => {
                                 placeHandle(true);
-                                await resetHandle();
+                                resetHandle();
                             }}
                         />
 
@@ -219,9 +254,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                                 positionFloating();
                             }}
                             on:delete={async () => {
-                                placeCaretAfter(activeImage);
-                                activeImage.remove();
-                                await resetHandle();
+                                if (activeImage) {
+                                    placeCaretAfter(activeImage);
+                                    mathjaxElement?.remove();
+                                    clear();
+                                }
                             }}
                             on:surround={async ({ detail }) => {
                                 const editor = await mathjaxEditor.editor;
@@ -237,7 +274,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             </WithFloating>
 
             <svelte:fragment slot="overlay">
-                <HandleBackground tooltip={errorMessage} />
+                <HandleBackground
+                    tooltip={errorMessage}
+                    --handle-background-color="var(--code-bg)"
+                />
             </svelte:fragment>
         </WithOverlay>
     {/if}

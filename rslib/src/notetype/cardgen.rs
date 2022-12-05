@@ -75,7 +75,7 @@ impl<N: Deref<Target = Notetype>> CardGenContext<N> {
     }
 
     /// If template[ord] generates a non-empty question given nonempty_fields, return the provided
-    /// deck id, or an overriden one. If question is empty, return None.
+    /// deck id, or an overridden one. If question is empty, return None.
     fn is_nonempty(&self, card_ord: usize, nonempty_fields: &HashSet<&str>) -> bool {
         let card = &self.cards[card_ord];
         let template = match card.template {
@@ -339,7 +339,7 @@ impl Collection {
     fn default_deck_conf(&mut self) -> Result<(DeckId, DeckConfigId)> {
         // currently hard-coded to 1, we could create this as needed in the future
         self.deck_conf_if_normal(DeckId(1))?
-            .ok_or_else(|| AnkiError::invalid_input("invalid default deck"))
+            .or_invalid("invalid default deck")
     }
 
     /// If deck exists and and is a normal deck, return its ID and config

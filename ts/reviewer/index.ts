@@ -14,9 +14,10 @@ import { mutateNextCardStates } from "./answering";
 globalThis.anki = globalThis.anki || {};
 globalThis.anki.mutateNextCardStates = mutateNextCardStates;
 
-import { bridgeCommand } from "../lib/bridgecommand";
+import { bridgeCommand } from "@tslib/bridgecommand";
+
 import { maybePreloadExternalCss } from "./css";
-import { allImagesLoaded, preloadAnswerImages } from "./images";
+import { allImagesLoaded, maybePreloadImages, preloadAnswerImages } from "./images";
 
 declare const MathJax: any;
 
@@ -100,21 +101,19 @@ async function setInnerHTML(element: Element, html: string): Promise<void> {
     }
 }
 
-const renderError =
-    (type: string) =>
-    (error: unknown): string => {
-        const errorMessage = String(error).substring(0, 2000);
-        let errorStack: string;
-        if (error instanceof Error) {
-            errorStack = String(error.stack).substring(0, 2000);
-        } else {
-            errorStack = "";
-        }
-        return `<div>Invalid ${type} on card: ${errorMessage}\n${errorStack}</div>`.replace(
-            /\n/g,
-            "<br>",
-        );
-    };
+const renderError = (type: string) => (error: unknown): string => {
+    const errorMessage = String(error).substring(0, 2000);
+    let errorStack: string;
+    if (error instanceof Error) {
+        errorStack = String(error.stack).substring(0, 2000);
+    } else {
+        errorStack = "";
+    }
+    return `<div>Invalid ${type} on card: ${errorMessage}\n${errorStack}</div>`.replace(
+        /\n/g,
+        "<br>",
+    );
+};
 
 export async function _updateQA(
     html: string,
@@ -132,6 +131,9 @@ export async function _updateQA(
 
     // prevent flash of unstyled content when external css used
     await maybePreloadExternalCss(html);
+
+    // prevent flickering & layout shift on image load
+    await maybePreloadImages(html);
 
     qa.style.opacity = "0";
 
@@ -163,13 +165,13 @@ export function _showQuestion(q: string, a: string, bodyclass: string): void {
         _updateQA(
             q,
             null,
-            function () {
+            function() {
                 // return to top of window
                 window.scrollTo(0, 0);
 
                 document.body.className = bodyclass;
             },
-            function () {
+            function() {
                 // focus typing area if visible
                 typeans = document.getElementById("typeans") as HTMLInputElement;
                 if (typeans) {
@@ -178,7 +180,7 @@ export function _showQuestion(q: string, a: string, bodyclass: string): void {
                 // preload images
                 allImagesLoaded().then(() => preloadAnswerImages(q, a));
             },
-        ),
+        )
     );
 }
 
@@ -191,7 +193,7 @@ export function _showAnswer(a: string, bodyclass: string): void {
         _updateQA(
             a,
             null,
-            function () {
+            function() {
                 if (bodyclass) {
                     //  when previewing
                     document.body.className = bodyclass;
@@ -200,10 +202,10 @@ export function _showAnswer(a: string, bodyclass: string): void {
                 // avoid scrolling to the answer until images load
                 allImagesLoaded().then(scrollToAnswer);
             },
-            function () {
+            function() {
                 /* noop */
             },
-        ),
+        )
     );
 }
 

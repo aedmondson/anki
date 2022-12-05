@@ -11,7 +11,6 @@ from anki.cards import Card, CardId
 from anki.collection import Collection, Config, OpChanges
 from anki.consts import *
 from anki.notes import Note, NoteId
-from anki.utils import is_win
 from aqt import gui_hooks
 from aqt.browser.table import Columns, ItemId, SearchContext
 from aqt.browser.table.model import DataModel
@@ -276,7 +275,7 @@ class Table:
 
     def _reset_selection(self) -> None:
         """Remove selection and focus without emitting signals.
-        If no selection change is triggerd afterwards, `browser.on_all_or_selected_rows_changed()`
+        If no selection change is triggered afterwards, `browser.on_all_or_selected_rows_changed()`
         and `browser.on_current_row_changed()` must be called.
         """
         self._view.selectionModel().reset()
@@ -367,9 +366,8 @@ class Table:
     def _setup_headers(self) -> None:
         vh = self._view.verticalHeader()
         hh = self._view.horizontalHeader()
-        if not is_win:
-            vh.hide()
-            hh.show()
+        vh.hide()
+        hh.show()
         hh.setHighlightSections(False)
         hh.setMinimumSectionSize(50)
         hh.setSectionsMovable(True)

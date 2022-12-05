@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import enum
 import os
-import platform
 import re
 import subprocess
 from dataclasses import dataclass
@@ -31,16 +30,15 @@ from aqt.qt import (
 @dataclass
 class ColoredIcon:
     path: str
-    # (day, night)
-    color: tuple[str, str]
+    color: dict[str, str]
 
     def current_color(self, night_mode: bool) -> str:
         if night_mode:
-            return self.color[1]
+            return self.color.get("dark", "")
         else:
-            return self.color[0]
+            return self.color.get("light", "")
 
-    def with_color(self, color: tuple[str, str]) -> ColoredIcon:
+    def with_color(self, color: dict[str, str]) -> ColoredIcon:
         return ColoredIcon(path=self.path, color=color)
 
 
@@ -178,12 +176,22 @@ class ThemeManager:
         "Returns body classes used when showing a card."
         return f"card card{card_ord+1} {self.body_class(night_mode)}"
 
-    def var(self, vars: tuple[str, str]) -> str:
+    def var(self, vars: dict[str, str]) -> str:
         """Given day/night colors/props, return the correct one for the current theme."""
-        idx = 1 if self.night_mode else 0
-        return vars[idx]
+        return vars["dark" if self.night_mode else "light"]
 
-    def qcolor(self, colors: tuple[str, str]) -> QColor:
+    def qcolor(self, colors: dict[str, str]) -> QColor:
+        """Create QColor instance from CSS string for the current theme."""
+
+        if m := re.match(
+            r"rgba\((\d+),\s*(\d+),\s*(\d+),\s*(\d+\.*\d+?)\)", self.var(colors)
+        ):
+            return QColor(
+                int(m.group(1)),
+                int(m.group(2)),
+                int(m.group(3)),
+                int(255 * float(m.group(4))),
+            )
         return QColor(self.var(colors))
 
     def _determine_night_mode(self) -> bool:
@@ -223,34 +231,32 @@ class ThemeManager:
 
         buf = splitter_styles(self)
 
-        if not is_mac:
+        if not is_mac or aqt.mw.pm.force_custom_styles():
             from aqt.stylesheets import (
                 button_styles,
                 checkbox_styles,
                 combobox_styles,
                 general_styles,
+                menu_styles,
                 scrollbar_styles,
                 spinbox_styles,
                 table_styles,
                 tabwidget_styles,
-                win10_styles,
             )
 
             buf += "".join(
                 [
                     general_styles(self),
                     button_styles(self),
+                    checkbox_styles(self),
+                    menu_styles(self),
                     combobox_styles(self),
                     tabwidget_styles(self),
                     table_styles(self),
                     spinbox_styles(self),
-                    checkbox_styles(self),
                     scrollbar_styles(self),
                 ]
             )
-
-        if is_win and platform.release() == "10":
-            buf += win10_styles(self)
 
         # allow addons to modify the styling
         buf = gui_hooks.style_did_init(buf)
@@ -260,19 +266,20 @@ class ThemeManager:
     def _apply_palette(self, app: QApplication) -> None:
         set_macos_dark_mode(self.night_mode)
 
-        if not self.night_mode:
+        if is_mac and not aqt.mw.pm.force_custom_styles():
             app.setStyle(QStyleFactory.create(self._default_style))  # type: ignore
             self.default_palette.setColor(
                 QPalette.ColorRole.Window, self.qcolor(colors.CANVAS)
             )
+            self.default_palette.setColor(
+                QPalette.ColorRole.AlternateBase, self.qcolor(colors.CANVAS)
+            )
             app.setPalette(self.default_palette)
             return
 
-        if not self.macos_dark_mode():
-            app.setStyle(QStyleFactory.create("fusion"))  # type: ignore
+        app.setStyle(QStyleFactory.create("fusion"))  # type: ignore
 
         palette = QPalette()
-
         text = self.qcolor(colors.FG)
         palette.setColor(QPalette.ColorRole.WindowText, text)
         palette.setColor(QPalette.ColorRole.ToolTipText, text)
@@ -280,7 +287,6 @@ class ThemeManager:
         palette.setColor(QPalette.ColorRole.ButtonText, text)
 
         hlbg = self.qcolor(colors.HIGHLIGHT_BG)
-        hlbg.setAlpha(64)
         palette.setColor(
             QPalette.ColorRole.HighlightedText, self.qcolor(colors.HIGHLIGHT_FG)
         )
@@ -290,11 +296,11 @@ class ThemeManager:
         palette.setColor(QPalette.ColorRole.Window, canvas)
         palette.setColor(QPalette.ColorRole.AlternateBase, canvas)
 
-        palette.setColor(QPalette.ColorRole.Button, QColor("#454545"))
+        palette.setColor(QPalette.ColorRole.Button, self.qcolor(colors.BUTTON_BG))
 
-        canvas_inset = self.qcolor(colors.CANVAS_INSET)
-        palette.setColor(QPalette.ColorRole.Base, canvas_inset)
-        palette.setColor(QPalette.ColorRole.ToolTipBase, canvas_inset)
+        input_base = self.qcolor(colors.CANVAS_CODE)
+        palette.setColor(QPalette.ColorRole.Base, input_base)
+        palette.setColor(QPalette.ColorRole.ToolTipBase, input_base)
 
         palette.setColor(
             QPalette.ColorRole.PlaceholderText, self.qcolor(colors.FG_SUBTLE)
@@ -313,7 +319,7 @@ class ThemeManager:
             disabled_color,
         )
 
-        palette.setColor(QPalette.ColorRole.Link, self.qcolor(colors.ACCENT_LINK))
+        palette.setColor(QPalette.ColorRole.Link, self.qcolor(colors.FG_LINK))
 
         palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
 

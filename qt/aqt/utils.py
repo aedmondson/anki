@@ -2,6 +2,7 @@
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 from __future__ import annotations
 
+import inspect
 import os
 import re
 import shutil
@@ -9,7 +10,7 @@ import subprocess
 import sys
 from functools import partial, wraps
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal, Sequence, Union, no_type_check
+from typing import TYPE_CHECKING, Any, Callable, Literal, Sequence, Union
 
 from send2trash import send2trash
 
@@ -82,23 +83,29 @@ if TYPE_CHECKING:
     TextFormat = Literal["plain", "rich"]
 
 
-def aqt_data_folder() -> str:
-    # running in Bazel on macOS?
-    if path := os.getenv("AQT_DATA_FOLDER"):
-        return path
+def aqt_data_path() -> Path:
     # packaged?
-    elif getattr(sys, "frozen", False):
-        path = os.path.join(sys.prefix, "lib/aqt/data")
-        if os.path.exists(path):
+    if getattr(sys, "frozen", False):
+        prefix = Path(sys.prefix)
+        path = prefix / "lib/_aqt/data"
+        if path.exists():
             return path
         else:
-            return os.path.join(sys.prefix, "../Resources/aqt/data")
-    elif os.path.exists(dir := os.path.join(os.path.dirname(__file__), "data")):
-        return os.path.abspath(dir)
+            return prefix / "../Resources/_aqt/data"
     else:
-        # should only happen when running unit tests
-        print("warning, data folder not found")
-        return "."
+        import _aqt.colors
+
+        data_folder = Path(inspect.getfile(_aqt.colors)).with_name("data")
+        if data_folder.exists():
+            return data_folder.absolute()
+        else:
+            # should only happen when running unit tests
+            print("warning, data folder not found")
+            return Path(".")
+
+
+def aqt_data_folder() -> str:
+    return str(aqt_data_path())
 
 
 # shortcut to access Fluent translations; set as
@@ -871,7 +878,7 @@ def current_window() -> QWidget | None:
 
 
 def send_to_trash(path: Path) -> None:
-    "Place file/folder in recyling bin, or delete permanently on failure."
+    "Place file/folder in recycling bin, or delete permanently on failure."
     if not path.exists():
         return
     try:
@@ -1154,7 +1161,7 @@ def gfxDriverIsBroken() -> bool:
 
 def startup_info() -> Any:
     "Use subprocess.Popen(startupinfo=...) to avoid opening a console window."
-    if not sys.platform == "win32":
+    if sys.platform != "win32":
         return None
     si = subprocess.STARTUPINFO()  # pytype: disable=module-attr
     si.dwFlags |= subprocess.STARTF_USESHOWWINDOW  # pytype: disable=module-attr
@@ -1243,6 +1250,7 @@ class KeyboardModifiersPressed:
 _deprecated_names = DeprecatedNamesMixinForModule(globals())
 
 
-@no_type_check
-def __getattr__(name: str) -> Any:
-    return _deprecated_names.__getattr__(name)
+if not TYPE_CHECKING:
+
+    def __getattr__(name: str) -> Any:
+        return _deprecated_names.__getattr__(name)

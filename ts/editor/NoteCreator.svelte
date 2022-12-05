@@ -3,10 +3,10 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
+    import { bridgeCommand } from "@tslib/bridgecommand";
+    import { registerShortcut } from "@tslib/shortcuts";
     import { onDestroy, onMount } from "svelte";
 
-    import { bridgeCommand } from "../lib/bridgecommand";
-    import { registerShortcut } from "../lib/shortcuts";
     import type { NoteEditorAPI } from "./NoteEditor.svelte";
     import NoteEditor from "./NoteEditor.svelte";
     import StickyBadge from "./StickyBadge.svelte";
@@ -45,7 +45,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 </script>
 
 <NoteEditor bind:this={noteEditor} {api}>
-    <svelte:fragment slot="field-state" let:index let:visible>
-        <StickyBadge bind:active={stickies[index]} {index} {visible} />
+    <svelte:fragment slot="field-state" let:index let:show>
+        <StickyBadge bind:active={stickies[index]} {index} {show} />
     </svelte:fragment>
 </NoteEditor>

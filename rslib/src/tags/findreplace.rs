@@ -9,7 +9,7 @@ use super::{is_tag_separator, join_tags, split_tags};
 use crate::{notes::NoteTags, prelude::*};
 
 impl Collection {
-    /// Replace occurences of a search with a new value in tags.
+    /// Replace occurrences of a search with a new value in tags.
     pub fn find_and_replace_tag(
         &mut self,
         nids: &[NoteId],
@@ -18,11 +18,10 @@ impl Collection {
         regex: bool,
         match_case: bool,
     ) -> Result<OpOutput<usize>> {
-        if replacement.contains(is_tag_separator) {
-            return Err(AnkiError::invalid_input(
-                "replacement name can not contain a space",
-            ));
-        }
+        require!(
+            !replacement.contains(is_tag_separator),
+            "replacement name cannot contain a space",
+        );
 
         let mut search = if regex {
             Cow::from(search)

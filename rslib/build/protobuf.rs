@@ -28,7 +28,7 @@ pub trait Service {
     }
     buf.push_str(
         r#"
-            _ => Err(crate::error::AnkiError::invalid_input("invalid command")),
+            _ => crate::invalid_input!("invalid command"),
         }
     }
 "#,
@@ -71,11 +71,8 @@ fn service_generator() -> Box<dyn prost_build::ServiceGenerator> {
 }
 
 pub fn write_backend_proto_rs() {
-    let proto_dir = if let Ok(proto) = env::var("PROTO_TOP") {
-        PathBuf::from(proto).parent().unwrap().to_owned()
-    } else {
-        PathBuf::from("../proto")
-    };
+    maybe_add_protobuf_to_path();
+    let proto_dir = PathBuf::from("../proto");
 
     let subfolders = &["anki"];
     let mut paths = vec![];
@@ -107,7 +104,7 @@ pub fn write_backend_proto_rs() {
         )
         .type_attribute(
             "Deck.Normal.DayLimit",
-            "#[derive(Copy, serde_derive::Deserialize, serde_derive::Serialize)]",
+            "#[derive(Copy, Eq, serde_derive::Deserialize, serde_derive::Serialize)]",
         )
         .type_attribute("HelpPageLinkRequest.HelpPage", "#[derive(strum::EnumIter)]")
         .type_attribute("CsvMetadata.Delimiter", "#[derive(strum::EnumIter)]")
@@ -121,4 +118,14 @@ pub fn write_backend_proto_rs() {
         )
         .compile_protos(paths.as_slice(), &[proto_dir])
         .unwrap();
+}
+
+/// If PROTOC is not defined, and protoc is not on path, use the protoc
+/// fetched by Bazel so that Rust Analyzer does not fail.
+fn maybe_add_protobuf_to_path() {
+    if let Ok(protoc) = env::var("PROTOC") {
+        if cfg!(windows) && !protoc.ends_with(".exe") {
+            env::set_var("PROTOC", format!("{protoc}.exe"));
+        }
+    }
 }
